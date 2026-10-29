@@ -97,6 +97,47 @@ PARAM_MAP = [
     ("network_resolution", 0x0002, "Network resolution", {0x30: "8-bit", 0x20: "16-bit"}),
 ]
 
+# FluxTool profile editor, from Windows screenshots of the Bench Test profile.
+# options are the dropdown order. A byte is listed only when it was confirmed
+# on hardware. Do not assign the other options a byte from their menu position.
+FLUX_FIELDS = {
+    "fail_mode": {
+        "options": ["Retain last value", "Goto Scene 1", "Goto Scene 2"],
+    },
+    "interpolation": {
+        "options": ["Off", "Video", "Colour", "White", "Glow"],
+    },
+    "dimming_curve": {
+        "options": ["logarithmic", "linear", "linear soft-start", "square"],
+    },
+    "network_resolution": {
+        "options": ["8 bit", "16 bit"],
+    },
+    "group4_scaling": {
+        "options": ["Off", "On"],
+    },
+    "dmx_start_address": {"min": 1, "max": 512},
+    "ntc_throttling_temp": {"min": 0, "max": 150, "unit": "°C"},
+    "power_scaling": {"min": 0, "max": 255},
+    "current_cs1": {"min": 150, "max": 1400, "unit": "mA"},
+    "current_cs2": {"min": 150, "max": 1400, "unit": "mA"},
+    "current_cs3": {"min": 150, "max": 1400, "unit": "mA"},
+    "current_cs4": {"min": 150, "max": 1400, "unit": "mA"},
+    "scene1_out12": {"min": 0, "max": 255, "note": "each output"},
+    "scene1_out34": {"min": 0, "max": 255, "note": "each output"},
+    "scene2_out12": {"min": 0, "max": 255, "note": "each output"},
+    "scene2_out34": {"min": 0, "max": 255, "note": "each output"},
+    "group4_mapping": {"min": 1, "max": 4, "note": "FluxTool shows 1-based; register low byte is 0-based"},
+}
+
+# Seen in FluxTool, not yet tied to a register we read.
+FLUX_UNMAPPED = {
+    "startup_mode": ["Goto Scene 1", "Goto Scene 2"],
+    "network_channel_count": {"min": 1, "max": 4},
+    "group_channel_mapping": {"min": 1, "max": 4},
+    "max_aggregate_current": "3400 mA advised",
+}
+
 # PIDs for identity reads (SET with no data → driver returns current value)
 IDENTITY_PIDS = [
     ('DEVICE_INFO', 0x0060),

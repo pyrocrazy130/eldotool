@@ -35,6 +35,8 @@ def decode_param(name, vlo, vhi, val_map):
         return {0x30: "8-bit", 0x20: "16-bit"}.get(vhi, f"0x{vhi:02x}")
     if name == "dmx_start_address":
         return str(vlo)
+    if name == "group4_mapping" and vlo <= 15:
+        return f"channel {vlo + 1}"
     if val_map and vlo in val_map:
         return val_map[vlo]
     if name.startswith("scene"):
@@ -42,15 +44,39 @@ def decode_param(name, vlo, vhi, val_map):
     return f"0x{vlo:02x}"
 
 
+def flux_hint(name):
+    spec = et.FLUX_FIELDS.get(name) or {}
+    parts = []
+    if "options" in spec:
+        parts.append("FluxTool: " + ", ".join(spec["options"]))
+    if "min" in spec and "max" in spec:
+        unit = spec.get("unit") or ""
+        parts.append(f"FluxTool range {spec['min']}–{spec['max']}{unit}")
+    if spec.get("note"):
+        parts.append(spec["note"])
+    return ". ".join(parts)
+
+
 def interpret_write(name, text):
     text = text.strip()
     if not text:
         raise ValueError("Enter a value")
     val = int(text, 0)
+    spec = et.FLUX_FIELDS.get(name) or {}
+    if name == "group4_mapping" and not text.lower().startswith("0x"):
+        if not 1 <= val <= 4:
+            raise ValueError("FluxTool channel mapping is 1–4")
+        return val - 1, f"channel {val} (stored 0x{val - 1:02x})"
     if name.startswith("current_cs") and not text.lower().startswith("0x") and val < 0x4000:
-        if not 0 <= val <= 1400:
-            raise ValueError("Current must be 0–1400 mA, or a raw 0x4xxx value")
+        lo = spec.get("min", 0)
+        hi = spec.get("max", 1400)
+        if not lo <= val <= hi:
+            raise ValueError(f"Current must be {lo}–{hi} mA, or a raw 0x4xxx value")
         return 0x4000 + val, f"{val} mA (stored as 0x{0x4000 + val:04x})"
+    if "min" in spec and "max" in spec and not text.lower().startswith("0x"):
+        if not spec["min"] <= val <= spec["max"]:
+            unit = spec.get("unit") or ""
+            raise ValueError(f"FluxTool expects {spec['min']}–{spec['max']}{unit}")
     if val < 0 or val > 0xFFFF:
         raise ValueError("Value must fit in two bytes")
     return val, f"0x{val & 0xFF:02x} / 0x{(val >> 8) & 0xFF:02x}"
@@ -415,11 +441,12 @@ class MainWindow(Adw.ApplicationWindow):
         write.append(self.write_btn)
         box.append(write)
         hint = Gtk.Label(
-            label="Write changes a stored register, not the live DMX level. Current is entered in mA.",
+            label="Write changes a stored register, not the live DMX level. Select a row to see the FluxTool range.",
             xalign=0,
             wrap=True,
         )
         hint.add_css_class("dim-label")
+        self.write_hint = hint
         box.append(hint)
         return box
 
@@ -497,7 +524,11 @@ class MainWindow(Adw.ApplicationWindow):
             decoded.add_css_class("accent")
             top.append(title)
             top.append(decoded)
-            sub = Gtk.Label(label=f"{name}  0x{addr:04x}  lo 0x{vlo:02x}  hi 0x{vhi:02x}", xalign=0)
+            extra = flux_hint(name)
+            sub_text = f"{name}  0x{addr:04x}  lo 0x{vlo:02x}  hi 0x{vhi:02x}"
+            if extra:
+                sub_text = sub_text + "\n" + extra
+            sub = Gtk.Label(label=sub_text, xalign=0, wrap=True)
             sub.add_css_class("dim-label")
             line.append(top)
             line.append(sub)
@@ -513,6 +544,10 @@ class MainWindow(Adw.ApplicationWindow):
             return
         self.selected = row.param_name
         self.write_btn.set_sensitive(True)
+        extra = flux_hint(self.selected)
+        self.write_hint.set_label(
+            extra or "Write changes a stored register, not the live DMX level."
+        )
         vlo, vhi = self.params.get(self.selected, (0, 0))
         if self.selected.startswith("current_cs"):
             raw = (vhi << 8) | vlo
